@@ -168,18 +168,19 @@ export abstract class ServerLoader implements IServerLifecycle {
    * @deprecated
    */
   async init() {
-    console.log("===> ServerLoader.init()");
-    const settings = ServerSettingsService.getMetadata(this);
+    if (!this._injector) {
+      const settings = ServerSettingsService.getMetadata(this);
 
-    this._injector = await createInjector(settings);
+      this._injector = await createInjector(settings);
 
-    if (settings) {
-      this.setSettings(settings);
+      if (settings) {
+        this.setSettings(settings);
+      }
+
+      await createExpressApplication(this.injector);
+      await createHttpsServer(this.injector);
+      await createHttpServer(this.injector);
     }
-
-    await createExpressApplication(this.injector);
-    await createHttpsServer(this.injector);
-    await createHttpServer(this.injector);
   }
 
   /**
@@ -247,6 +248,7 @@ export abstract class ServerLoader implements IServerLifecycle {
   public async start(): Promise<any> {
     try {
       const start = new Date();
+      await this.init();
       await this.loadSettingsAndInjector();
       await this.loadMiddlewares();
       await this.startServers();
