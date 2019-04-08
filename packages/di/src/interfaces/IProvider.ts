@@ -14,7 +14,7 @@ export interface IProvider<T> {
   /**
    * Provider type
    */
-  type: ProviderType | string;
+  type?: ProviderType | string;
   /**
    * Instance build by the injector
    */
