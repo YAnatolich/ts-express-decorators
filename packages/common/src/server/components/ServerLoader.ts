@@ -1,10 +1,8 @@
-import {isClass} from "@tsed/core";
 import {InjectorService} from "@tsed/di";
 import * as Express from "express";
-import * as globby from "globby";
 import * as Http from "http";
 import * as Https from "https";
-import * as Path from "path";
+import {importComponents} from "packages/common/src/server/utils/importComponents";
 import {$log} from "ts-log-debug";
 import {IServerSettings} from "../../config/interfaces/IServerSettings";
 import {ServerSettingsService} from "../../config/services/ServerSettingsService";
@@ -143,27 +141,6 @@ export abstract class ServerLoader implements IServerLifecycle {
   }
 
   /**
-   *
-   * @returns {any}
-   * @param files
-   * @param excludes
-   */
-  static cleanGlobPatterns(files: string | string[], excludes: string[]): string[] {
-    excludes = excludes.map((s: string) => "!" + s.replace(/!/gi, ""));
-
-    return []
-      .concat(files as any)
-      .map((file: string) => {
-        if (!require.extensions[".ts"]) {
-          file = file.replace(/\.ts$/i, ".js");
-        }
-
-        return Path.resolve(file);
-      })
-      .concat(excludes as any);
-  }
-
-  /**
    * Init injector with minimal configuration
    * @deprecated
    */
@@ -299,20 +276,11 @@ export abstract class ServerLoader implements IServerLifecycle {
    * @returns {ServerLoader}
    */
   public scan(patterns: string | string[], endpoint?: string): ServerLoader {
-    const promises = globby.sync(ServerLoader.cleanGlobPatterns(patterns, this.settings.exclude)).map(async (file: string) => {
-      $log.debug(`Import file ${endpoint}:`, file);
-      try {
-        const classes: any[] = await import(file);
-        this.addComponents(classes, {endpoint});
-      } catch (er) {
-        /* istanbul ignore next */
-        $log.error(er);
-        /* istanbul ignore next */
-        process.exit(-1);
-      }
-    });
-
-    this._scannedPromises = this._scannedPromises.concat(promises);
+    if (endpoint) {
+      this.addControllers(endpoint, [].concat(patterns as any));
+    } else {
+      this.addComponents([].concat(patterns as any));
+    }
 
     return this;
   }
@@ -323,15 +291,7 @@ export abstract class ServerLoader implements IServerLifecycle {
    * @param options
    */
   public addComponents(classes: any | any[], options: Partial<IComponentScanned> = {}): ServerLoader {
-    classes = Object.keys(classes)
-      .map(key => classes[key])
-      .filter(clazz => isClass(clazz));
-
-    const components: any = Object.assign(options, {
-      classes
-    });
-
-    this._components = (this._components || []).concat([components]).filter(o => !!o);
+    this.settings.componentsScan = this.settings.componentsScan.concat(classes);
 
     return this;
   }
@@ -358,7 +318,7 @@ export abstract class ServerLoader implements IServerLifecycle {
    * @returns {ServerLoader}
    */
   public addControllers(endpoint: string, controllers: any[]) {
-    return this.addComponents(controllers, {endpoint});
+    this.settings.mount[endpoint] = (this.settings.mount[endpoint] || []).concat(controllers);
   }
 
   /**
@@ -374,17 +334,7 @@ export abstract class ServerLoader implements IServerLifecycle {
    * @returns {ServerLoader}
    */
   public mount(endpoint: string, list: any | string | (any | string)[]): ServerLoader {
-    const patterns = [].concat(list).filter((item: string) => {
-      if (isClass(item)) {
-        this.addControllers(endpoint, [item]);
-
-        return false;
-      }
-
-      return true;
-    });
-
-    this.scan(patterns, endpoint);
+    this.addControllers(endpoint, list);
 
     return this;
   }
@@ -401,7 +351,7 @@ export abstract class ServerLoader implements IServerLifecycle {
       $log.level = level;
     }
 
-    await Promise.all(this._scannedPromises);
+    await this.resolve();
     await this.callHook("$onInit");
 
     $log.debug("Initialize settings");
@@ -464,6 +414,18 @@ export abstract class ServerLoader implements IServerLifecycle {
     this.use(GlobalErrorHandlerMiddleware);
   }
 
+  protected async resolve() {
+    const components = await Promise.all([
+      importComponents(this.settings.mount, this.settings.exclude),
+      importComponents(this.settings.componentsScan, this.settings.exclude)
+    ]);
+
+    const routes = components.reduce((flat, value) => flat.concat(value), []).filter(component => !!component.endpoint);
+
+    this.settings.set("routes", routes);
+    // this.settings.addComponents();
+  }
+
   /**
    *
    */
@@ -474,25 +436,6 @@ export abstract class ServerLoader implements IServerLifecycle {
     if (this.settings.env === "test") {
       $log.stop();
     }
-
-    const bind = (property: string, value: any, map: Map<string, any>) => {
-      switch (property) {
-        case "mount":
-          Object.keys(this.settings.mount).forEach(key => this.mount(key, value[key]));
-          break;
-
-        case "componentsScan":
-          this.settings.componentsScan.forEach(componentDir => this.scan(componentDir));
-          break;
-      }
-    };
-
-    this.settings.forEach((value, key, map) => {
-      /* istanbul ignore else */
-      if (value !== undefined) {
-        bind(key, value, map);
-      }
-    });
   }
 
   private callHook = (key: string, elseFn = new Function(), ...args: any[]) => {
