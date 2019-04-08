@@ -2,7 +2,7 @@
  * @module common/mvc
  */
 /** */
-export * from "./IControllerOptions";
+export * from "./IControllerProvider";
 export * from "./IControllerRoute";
 export * from "./IMiddleware";
 export * from "./IMiddlewareError";

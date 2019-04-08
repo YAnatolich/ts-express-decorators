@@ -1,89 +1,40 @@
 import {ProxyMap, Type} from "@tsed/core";
-import {Injectable, InjectorService, ProviderScope, ProviderType} from "@tsed/di";
-import * as Express from "express";
-import {$log} from "ts-log-debug";
-import {ServerSettingsService} from "../../config/services/ServerSettingsService";
-import {IComponentScanned} from "../../server/interfaces";
+import {Constant, Injectable, InjectorService, ProviderScope, ProviderType} from "@tsed/di";
 import {ControllerBuilder} from "../class/ControllerBuilder";
 import {ControllerProvider} from "../class/ControllerProvider";
-import {ExpressApplication} from "../decorators";
-import {RouteService} from "./RouteService";
+import {IRouteProvider, RouteService} from "./RouteService";
 
 @Injectable({
   scope: ProviderScope.SINGLETON,
   global: true
 })
 export class ControllerService extends ProxyMap<Type<any> | any, ControllerProvider> {
+  @Constant("routers.defaultRoutersOptions", {})
+  private defaultRoutersOptions: any;
+
   /**
    *
-   * @param expressApplication
-   * @param injectorService
-   * @param settings
+   * @param injector
    * @param routeService
    */
-  constructor(
-    private injectorService: InjectorService,
-    @ExpressApplication private expressApplication: Express.Application,
-    private settings: ServerSettingsService,
-    private routeService: RouteService
-  ) {
-    super(injectorService as any, {filter: {type: ProviderType.CONTROLLER}});
+  constructor(private injector: InjectorService, private routeService: RouteService) {
+    super(injector as any, {filter: {type: ProviderType.CONTROLLER}});
 
-    this.buildRouters();
+    this.buildControllers();
   }
 
-  get routes(): {route: string; provider: any}[] {
+  get routes(): IRouteProvider[] {
     return this.routeService.routes || [];
   }
 
   /**
-   *
-   * @param components
+   * Build routers and controllers
    */
-  public $onRoutesInit(components: {file: string; endpoint: string; classes: any[]}[]) {
-    $log.info("Map controllers");
-    this.mapComponents(components);
-  }
-
-  /**
-   * Build routers and con
-   */
-  private buildRouters() {
-    const defaultRoutersOptions = this.settings.routers;
-
+  private buildControllers() {
     this.forEach((provider: ControllerProvider) => {
       if (!provider.router && !provider.hasParent()) {
-        new ControllerBuilder(provider, defaultRoutersOptions).build(this.injectorService);
+        new ControllerBuilder(provider, this.defaultRoutersOptions).build(this.injector);
       }
     });
-  }
-
-  /**
-   *
-   * @param components
-   */
-  private mapComponents(components: IComponentScanned[]) {
-    components.forEach(component => {
-      Object.keys(component.classes)
-        .map(clazzName => component.classes[clazzName])
-        .filter(clazz => component.endpoint && this.has(clazz))
-        .map(clazz => this.get(clazz))
-        .forEach((provider: ControllerProvider) => {
-          if (!provider.hasParent()) {
-            this.mountRouter(component.endpoint!, provider);
-          }
-        });
-    });
-  }
-
-  /**
-   *
-   * @param {string} endpoint
-   * @param {ControllerProvider} provider
-   */
-  private mountRouter(endpoint: string, provider: ControllerProvider) {
-    const route = provider.getEndpointUrl(endpoint!);
-    this.routeService.addRoute({provider, route});
-    this.expressApplication.use(route, provider.router);
   }
 }

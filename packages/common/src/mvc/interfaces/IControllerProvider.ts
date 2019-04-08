@@ -8,7 +8,7 @@ import {PathParamsType} from "./PathParamsType";
 /**
  *
  */
-export interface IControllerOptions extends Partial<IProvider<any>> {
+export interface IControllerProvider extends Partial<IProvider<any>> {
   path?: PathParamsType;
   children?: Type<any>[];
   routerOptions?: IRouterSettings;

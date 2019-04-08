@@ -1,6 +1,6 @@
 import {isArrayOrArrayClass, Type} from "@tsed/core";
 import {registerController} from "@tsed/di";
-import {IControllerOptions} from "../../interfaces/IControllerOptions";
+import {IControllerProvider} from "../../interfaces/IControllerProvider";
 import {PathParamsType} from "../../interfaces/PathParamsType";
 
 /**
@@ -31,7 +31,7 @@ import {PathParamsType} from "../../interfaces/PathParamsType";
  * @returns {Function}
  * @decorator
  */
-export function Controller(options: PathParamsType | IControllerOptions, ...children: Type<any>[]): Function {
+export function Controller(options: PathParamsType | IControllerProvider, ...children: Type<any>[]): Function {
   return (target: any): void => {
     if (typeof options === "string" || options instanceof RegExp || isArrayOrArrayClass(options)) {
       registerController({
