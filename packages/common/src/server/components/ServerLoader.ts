@@ -12,7 +12,7 @@ import {LogIncomingRequestMiddleware} from "../../mvc/components/LogIncomingRequ
 import {ExpressApplication} from "../../mvc/decorators/class/expressApplication";
 import {HttpServer} from "../decorators/httpServer";
 import {HttpsServer} from "../decorators/httpsServer";
-import {IComponentScanned, IServerLifecycle} from "../interfaces";
+import {IServerLifecycle} from "../interfaces";
 import {createExpressApplication} from "../utils/createExpressApplication";
 import {createHttpServer} from "../utils/createHttpServer";
 import {createHttpsServer} from "../utils/createHttpsServer";
@@ -65,8 +65,6 @@ $log.level = "info";
 
 export abstract class ServerLoader implements IServerLifecycle {
   public version: string = "0.0.0-PLACEHOLDER";
-  private _components: IComponentScanned[] = [];
-  private _scannedPromises: Promise<any>[] = [];
   private _injector: InjectorService;
 
   /**
@@ -290,7 +288,7 @@ export abstract class ServerLoader implements IServerLifecycle {
    * @param classes
    * @param options
    */
-  public addComponents(classes: any | any[], options: Partial<IComponentScanned> = {}): ServerLoader {
+  public addComponents(classes: any | any[], options: any = {}): ServerLoader {
     this.settings.componentsScan = this.settings.componentsScan.concat(classes);
 
     return this;
@@ -402,10 +400,7 @@ export abstract class ServerLoader implements IServerLifecycle {
     this.use(LogIncomingRequestMiddleware);
     await this.callHook("$onMountingMiddlewares", undefined, this.expressApp);
     await this.injector.emit("$beforeRoutesInit");
-    await this.injector.emit("$onRoutesInit", this._components);
-
-    delete this._components; // free memory
-
+    await this.injector.emit("$onRoutesInit");
     await this.injector.emit("$afterRoutesInit");
 
     await this.callHook("$afterRoutesInit", undefined, this.expressApp);
